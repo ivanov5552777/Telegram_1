@@ -1,0 +1,57 @@
+name: Build WeryGram APK
+
+on:
+  push:
+    branches: [ master, main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Скачиваем репозиторий со всеми подмодулями
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # 2. Устанавливаем правильную версию Java (для Телеграма нужна 17)
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'zulu'
+          cache: 'gradle'
+
+      # 3. Настраиваем Python для запуска нашего скрипта автоматизации
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      # 4. Запускаем наш патчер, который передвинет кнопку и пропишет клики
+      - name: Run Patcher Script
+        run: |
+          if [ -f patcher.py ]; then
+            python patcher.py
+          else
+            echo "⚠️ Предупреждение: Файл patcher.py не найден в корне проекта!"
+          fi
+
+      # 5. Даем права на запуск сборщика Gradle
+      - name: Grant Execute Permission for Gradle
+        run: chmod +x gradlew
+
+      # 6. Компилируем проект (создаем Debug APK)
+      - name: Build Debug APK
+        run: ./gradlew assembleDebug --no-daemon
+
+      # 7. ГАРАНТИРОВАННЫЙ СБОР И ОТПРАВКА APK В АРТЕФАКТЫ
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeryGram-Debug-APK
+          path: TMessagesProj/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
