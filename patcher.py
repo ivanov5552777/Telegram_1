@@ -28,59 +28,52 @@ def patch_once(path, marker, insertion, before=False):
 
 ACTIVITY = '''\
 package org.telegram.ui;
+
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.widget.LinearLayout;
-import android.widget.Switch;
-import android.widget.TextView;
-import org.telegram.messenger.AndroidUtilities;
 import org.telegram.messenger.MessagesController;
-import org.telegram.ui.ActionBar.ActionBar;
+import org.telegram.messenger.UserConfig;
 import org.telegram.ui.ActionBar.BaseFragment;
 import org.telegram.ui.ActionBar.Theme;
+import org.telegram.ui.Cells.TextCheckCell;
+
 public class WeryGramPremiumActivity extends BaseFragment {
     @Override
     public android.view.View createView(Context context) {
         actionBar.setBackButtonImage(org.telegram.messenger.R.drawable.ic_ab_back);
         actionBar.setTitle("WeryGram");
-        actionBar.setActionBarMenuOnItemClick(new ActionBar.ActionBarMenuOnItemClick() {
+        actionBar.setActionBarMenuOnItemClick(new org.telegram.ui.ActionBar.ActionBar.ActionBarMenuOnItemClick() {
             @Override public void onItemClick(int id) { if (id == -1) finishFragment(); }
         });
+
         LinearLayout root = new LinearLayout(context);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(Theme.getColor(Theme.key_windowBackgroundWhite));
-        LinearLayout row = new LinearLayout(context);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setPadding(AndroidUtilities.dp(16),AndroidUtilities.dp(14),AndroidUtilities.dp(16),AndroidUtilities.dp(14));
-        row.setGravity(android.view.Gravity.CENTER_VERTICAL);
-        LinearLayout labels = new LinearLayout(context);
-        labels.setOrientation(LinearLayout.VERTICAL);
-        labels.setLayoutParams(new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        TextView title = new TextView(context);
-        title.setText("Visual Premium");
-        title.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 16);
-        title.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteBlackText));
-        TextView sub = new TextView(context);
-        sub.setText("\u0414\u0430\u0451\u0442 \u0432\u0438\u0437\u0443\u0430\u043b\u044c\u043d\u043e Telegram Premium");
-        sub.setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13);
-        sub.setTextColor(Theme.getColor(Theme.key_windowBackgroundWhiteGrayText2));
-        labels.addView(title);
-        labels.addView(sub);
-        android.view.View div = new android.view.View(context);
-        div.setBackgroundColor(Theme.getColor(Theme.key_divider));
-        LinearLayout.LayoutParams dp2 = new LinearLayout.LayoutParams(AndroidUtilities.dp(1), AndroidUtilities.dp(40));
-        dp2.setMargins(AndroidUtilities.dp(12),0,AndroidUtilities.dp(12),0);
-        div.setLayoutParams(dp2);
-        final SharedPreferences prefs = MessagesController.getGlobalMainSettings();
-        Switch toggle = new Switch(context);
-        toggle.setChecked(prefs.getBoolean("wery_visual_premium", false));
-        toggle.setOnCheckedChangeListener((btn, checked) -> {
-            prefs.edit().putBoolean("wery_visual_premium", checked).apply();
+
+        TextCheckCell premiumCell = new TextCheckCell(context);
+        SharedPreferences prefs = MessagesController.getGlobalMainSettings();
+        boolean isEnabled = prefs.getBoolean("wery_visual_premium", false);
+
+        premiumCell.setTextAndValueAndCheck(
+            "Visual Premium", 
+            "Дает визуально телеграм премиум", 
+            isEnabled, 
+            false, 
+            true
+        );
+
+        premiumCell.setOnClickListener(v -> {
+            boolean newState = !prefs.getBoolean("wery_visual_premium", false);
+            prefs.edit().putBoolean("wery_visual_premium", newState).apply();
+            premiumCell.setChecked(newState);
+            
+            // Включаем визуал премиума в самом приложении
+            UserConfig.getInstance(currentAccount).isPremium = newState;
+            UserConfig.getInstance(currentAccount).saveConfig(false);
         });
-        row.addView(labels);
-        row.addView(div);
-        row.addView(toggle);
-        root.addView(row);
+
+        root.addView(premiumCell);
         fragmentView = root;
         return fragmentView;
     }
@@ -103,9 +96,11 @@ def main():
     ]
     fill_anchor = next((a for a in fill_anchors if a in read(sa)), None)
     if fill_anchor:
+        # ИСПРАВЛЕНИЕ ЗДЕСЬ: добавлен полный путь org.telegram.messenger.R.drawable
         if not patch_once(sa, fill_anchor,
-            fill_anchor.replace("{", "{\n        items.add(0, UItem.asButton(1000, R.drawable.msg_settings, \"WeryGram\"));")):
+            fill_anchor.replace("{", "{\n        items.add(0, UItem.asButton(1000, org.telegram.messenger.R.drawable.msg_settings, \"WeryGram\"));")):
             errors += 1
+        
         click_anchors = [
             "void onItemClick(UItem item, View view, int position, float x, float y) {",
             "public void onItemClick(UItem item, View view, int position, float x, float y) {",
@@ -120,7 +115,7 @@ def main():
         click_anchor = next((a for a in click_anchors if a in read(sa)), None)
         if click_anchor:
             if not patch_once(sa, click_anchor,
-                click_anchor.replace("{", "{\n        if (item.id == 1000) { presentFragment(new WeryGramPremiumActivity()); return; }")):
+                click_anchor.replace("{", "{\n        if (item != null && item.id == 1000) { presentFragment(new WeryGramPremiumActivity()); return; }")):
                 errors += 1
         else:
             print("✘ SettingsActivity: onItemClick не найден", file=sys.stderr); errors += 1
@@ -140,3 +135,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    
