@@ -462,22 +462,37 @@ def main():
 
     if not insert_before(sa, "import org.telegram.ui.Components.", "import org.telegram.ui.WeryGramPremiumActivity;"): errors += 1
 
-    # WeryGram кнопка — ПЕРВОЙ в списке (до Аккаунта)
-    fill_anchors = [
-        "void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
-        "public void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
-        "private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
-    ]
+    # WeryGram кнопка — ПЕРВОЙ (строго перед Аккаунтом)
     text = read(sa)
-    fill_anchor = next((a for a in fill_anchors if a in text), None)
-    if fill_anchor:
-        if 'UItem.asButton(1000' not in text:
-            if not insert_after(sa, fill_anchor, '        items.add(0, UItem.asButton(1000, R.drawable.msg_settings, "WeryGram"));'):
+    if 'UItem.asButton(1000' not in text:
+        # Ищем точную строку где items.add добавляет accountRow
+        account_line = None
+        for ln in text.splitlines():
+            if 'items.add(' in ln and 'accountRow' in ln:
+                account_line = ln
+                break
+
+        if account_line:
+            # Берём отступ из найденной строки чтобы кнопка выглядела одинаково
+            indent = account_line[:len(account_line) - len(account_line.lstrip())]
+            wery_item = f'{indent}items.add(UItem.asButton(1000, R.drawable.msg_settings, "WeryGram"));'
+            if not insert_before(sa, account_line, wery_item):
                 errors += 1
         else:
-            print("↩ skip fillItems")
+            # Fallback: нет accountRow → вставляем в начало fillItems
+            fill_anchors = [
+                "void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
+                "public void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
+                "private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
+            ]
+            fill_anchor = next((a for a in fill_anchors if a in text), None)
+            if fill_anchor:
+                if not insert_after(sa, fill_anchor, '        items.add(0, UItem.asButton(1000, R.drawable.msg_settings, "WeryGram"));'):
+                    errors += 1
+            else:
+                print("✘ fillItems/accountRow не найден", file=sys.stderr); errors += 1
     else:
-        print("✘ fillItems не найден", file=sys.stderr); errors += 1
+        print("↩ skip WeryGram button")
 
     click_anchors = [
         "void onItemClick(UItem item, View view, int position, float x, float y) {",
