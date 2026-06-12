@@ -469,46 +469,41 @@ def main():
     if not insert_before(sa, "import org.telegram.ui.Components.",
                          "import org.telegram.ui.WeryGramPremiumActivity;"): errors += 1
 
-    # ── WeryGram кнопка — первой в списке настроек ────────────────────────────
-    fill_anchors = [
-        "void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
-        "public void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
-        "private void fillItems(ArrayList<UItem> items, UniversalAdapter adapter) {",
-    ]
+    # ── WeryGram кнопка — ПЕРВОЙ перед "Аккаунт" ────────────────────────────
     text = read(sa)
-    fill_anchor = next((a for a in fill_anchors if a in text), None)
-    if fill_anchor:
-        if 'UItem.asButton(1000' not in text:
-            # Добавляем WeryGram первой кнопкой, потом Аккаунт вторым
-            if not insert_after(sa, fill_anchor,
-                '        items.add(UItem.asButton(1000, R.drawable.msg_settings, "WeryGram"));'):
-                errors += 1
-            print("✔ WeryGram button added as first item")
+    
+    # Маркер для вставки — это строка где добавляется кнопка "Аккаунт" (ID=1)
+    wery_marker = 'SettingCell.Factory.of(1, IconBackgroundColors.BLUE.top, IconBackgroundColors.BLUE.bottom, R.drawable.settings_account, getString(R.string.SettingsAccount), getString(R.string.SettingsAccountInfo))'
+    
+    if wery_marker in text:
+        if 'SettingCell.Factory.of(1000' not in text:
+            # Добавляем WeryGram ПЕРЕД кнопкой "Аккаунт"
+            wery_button = 'items.add(SettingCell.Factory.of(1000, 0xFF9C27B0, 0xFF7B1FA2, R.drawable.msg_settings, "WeryGram"));\n        items.add('
+            text = text.replace('items.add(' + wery_marker, wery_button + wery_marker, 1)
+            write(sa, text)
+            print("✔ WeryGram button added BEFORE Account")
         else:
-            print("↩ skip fillItems")
+            print("↩ WeryGram button already exists")
     else:
-        print("✘ fillItems не найден", file=sys.stderr); errors += 1
+        print("✘ Could not find Account button marker", file=sys.stderr); errors += 1
 
     # ── Обработчик клика ───────────────────────────────────────────────────────
-    click_anchors = [
-        "void onItemClick(UItem item, View view, int position, float x, float y) {",
-        "public void onItemClick(UItem item, View view, int position, float x, float y) {",
-        "private void onItemClick(UItem item, View view, int position, float x, float y) {",
-        "private void onClick(UItem item, View view, int position, float x, float y) {",
-        "void onClick(UItem item, View view, int position, float x, float y) {",
-        "public void onClick(UItem item, View view, int position, float x, float y) {",
-        "void onClick(UItem item) {",
-        "public void onClick(UItem item) {",
-        "private void onClick(UItem item) {",
-    ]
-    click_anchor = next((a for a in click_anchors if a in read(sa)), None)
-    if click_anchor:
-        if not insert_after(sa, click_anchor,
-            '        if (item.id == 1000) { presentFragment(new WeryGramPremiumActivity()); return; }'):
-            errors += 1
-        print("✔ WeryGram click handler added")
+    text = read(sa)
+    
+    # Маркер в switch для обработки клика по кнопке "Аккаунт" (case 1)
+    click_marker = 'case 1:\n                presentFragment(new SettingsPrivacyActivity());'
+    
+    if click_marker in text:
+        if 'case 1000:' not in text:
+            # Добавляем обработчик для WeryGram
+            wery_case = 'case 1000:\n                presentFragment(new WeryGramPremiumActivity());\n                break;\n            case 1:\n                presentFragment(new SettingsPrivacyActivity());'
+            text = text.replace(click_marker, wery_case, 1)
+            write(sa, text)
+            print("✔ WeryGram click handler added")
+        else:
+            print("↩ WeryGram handler already exists")
     else:
-        print("✘ onClick не найден", file=sys.stderr); errors += 1
+        print("⚠ Could not find click handler marker", file=sys.stderr)
 
     # ── Java файлы ─────────────────────────────────────────────────────────────
     ui_dir = os.path.dirname(sa)
